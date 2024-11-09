@@ -1,219 +1,652 @@
-/**
- *  自定义网站配置 
- */
+// 定义config对象，包含搜索引擎模板
 const config = {
-  title: "自定义导航",                 //write your website title
-  subtitle: "Cloudflare Workers Dir", //write your website subtitle
-  logo_icon: "sitemap",               //select your logo by semantic-ui icon (you can get more msg in:https://semantic-ui.com/elements/icon.html)
-  hitokoto: true,                     //use hitokoto or not
-  search:true,                        //enable search function
-  search_engine:[                     //choose search engine which you use
-    {
-      name:"百 度",
-      template:"https://www.baidu.com/s?wd=$s"
-    },
-    {
-      name:"谷 歌",
-      template:"https://www.google.com/search?q=$s"
-    },
-    {
-      name:"必 应",
-      template:"https://www.bing.com/search?q=$s"
-    },
-    {
-      name:"搜 狗",
-      template:"https://www.sogou.com/web?query=$s"
-    }
-  ],
-  selling_ads: true,                  //Selling your domain or not.(turning on may be helpful for selling this domain by showing some ads.)
-  sell_info:{
-    domain:"example.com",
-    price:500,                        //domain price
-    mon_unit:"yen sign",              //monetary unit 
-    contact:[                         //how to contact you
-      {
-        type:"envelope",               //contact type ("weixin","qq","telegram plane","envelope" or "phone")
-        content:"info@example.com"
-      }
-    ]                        
-  },
-  lists: [                            //Url list
-    {
-      name:"技术",
-      icon:"code",
-      list:[
-        {
-          url:"https://oschina.net/",
-          name:"开源中国",
-          desc:"程序员集散地"
-        },
-        {
-          url:"https://v2ex.com",
-          name:"V2EX",
-          desc:"程序员集散地"
-        },
-        {
-          url:"https://csdn.net/",
-          name:"CSDN技术社区",
-          desc:"程序员集散地"
-        },
-        {
-          url:"https://github.com/",
-          name:"Github",
-          desc:"程序员集散地"
-        },
-      ]
-    },
-    {
-      name:"学习",
-      icon:"graduation cap",
-      list:[
-        {
-          url:"https://w3school.com.cn/",
-          name:"W3school在线教程",
-          desc:"程序员集散地"
-        },
-        {
-          url:"https://runoob.com/",
-          name:"菜鸟教程",
-          desc:"程序员集散地"
-        },
-        {
-          url:"https://segmentfault.com/",
-          name:"思否社区",
-          desc:"程序员集散地"
-        },
-        {
-          url:"https://jianshu.com/",
-          name:"简书",
-          desc:"程序员集散地"
-        },
-      ]
-    }
+  title: "网站标题",
+  subtitle: "网站描述",
+  // 其他配置...
+  searchengine: [
+      { name: "百度", template: "https://www.baidu.com/s?wd=$s" },
+      { name: "谷歌", template: "https://www.google.com/search?q=$s" },
+      { name: "必应", template: "https://www.bing.com/search?q=$s" },
+      { name: "搜狗", template: "https://www.sogou.com/web?query=$s" }
   ]
-}
-const el = (tag, attrs, content) => `<${tag} ${attrs.join(" ")}>${content}</${tag}>`;
+};
+
+
+
+addEventListener('fetch', event => {
+	event.respondWith(handleRequest(event.request));
+});
 
 async function handleRequest(request) {
-  const init = {
-    headers: {
-      'content-type': 'text/html;charset=UTF-8',
-    },
-  }
-  return new Response(renderHTML(renderIndex(),config.selling_ads? renderSeller() :null), init);
-}
-addEventListener('fetch', event => {
-  return event.respondWith(handleRequest(event.request))
-})
+	const { pathname } = new URL(request.url);
 
-/*通过分析链接 实时获取favicon
-* @url 需要分析的Url地址
-*/
-function getFavicon(url){
-  if(url.match(/https{0,1}:\/\//)){
-    //return "https://ui-avatars.com/api/?bold=true&size=36&background=0D8ABC&color=fff&rounded=true&name=" + url.split('//')[1];
-    return "https://www.google.cn/s2/favicons?sz=64&domain_url=" + url;
-  }else{
-    //return "https://ui-avatars.com/api/?bold=true&size=36&background=0D8ABC&color=fff&rounded=true&name=" + url;
-    return "https://www.google.cn/s2/favicons?sz=64&domain_url=http://" + url;
-  } 
-}
+	if (pathname === '/') {
+		return new Response(await renderNavigationPage(), {
+			headers: { 'Content-Type': 'text/html; charset=utf-8' },
+		});
+	}
 
-/** Render Functions
- *  渲染模块函数
- */
+	if (pathname === '/data') {
+		const navigationData = await getNavigationData();
+		return new Response(JSON.stringify(navigationData), {
+			headers: { 'Content-Type': 'application/json; charset=utf-8' },
+		});
+	}
 
-function renderIndex(){
-  const footer = el('footer',[],el('div',['class="footer"'],'Powered by' + el('a',['class="ui label"','href="https://github.com/sleepwood/cf-worker-dir"','target="_blank"'],el('i',['class="github icon"'],"") + 'Cf-Worker-Dir') + ' &copy; Base on ' + el('a',['class="ui label"'],el('i',['class="balance scale icon"'],"") + 'MIT License')));
-  return renderHeader() + renderMain() + footer;
-}
+	if (pathname === '/add-category' && request.method === 'POST') {
+		const requestBody = await request.json();
+		const navigationData = await getNavigationData();
+		const newCategory = { name: requestBody.name, sites: [] };
+		navigationData.categories.push(newCategory);
+		await setNavigationData(navigationData);
+		return new Response(JSON.stringify({ message: 'Category added successfully' }), {
+			headers: { 'Content-Type': 'application/json; charset=utf-8' },
+		});
+	}
 
-function renderHeader(){
-  const item = (template,name) => el('a',['class="item"',`data-url="${template}"`],name);
+	if (pathname === '/add-site' && request.method === 'POST') {
+		const requestBody = await request.json();
+		const navigationData = await getNavigationData();
+		const { categoryIndex, siteName, siteUrl, siteIcon } = requestBody;
+		navigationData.categories[categoryIndex].sites.push({ name: siteName, url: siteUrl, icon: siteIcon });
+		await setNavigationData(navigationData);
+		return new Response(JSON.stringify({ message: 'Site added successfully' }), {
+			headers: { 'Content-Type': 'application/json; charset=utf-8' },
+		});
+	}
 
-  var nav = el('div',['class="ui large secondary inverted menu"'],el('div',['class="item"'],el('p',['id="hitokoto"'],'条条大路通罗马')))
-  var title = el('h1',['class="ui inverted header"'],el('i',[`class="${config.logo_icon} icon"`],"") + el('div',['class="content"'],config.title + el('div',['class="sub header"'],config.subtitle)));
-  var menu = el('div',['id="sengine"','class="ui bottom attached tabular inverted secondary menu"'],el('div',['class="header item"'],'&nbsp;') + config.search_engine.map((link,key) =>{
-    if(key == 0){
-      return el('a',['class="active item"',`data-url="${link.template}"`],link.name);
-    }else{
-      return item(link.template,link.name);
-    }
-  }).join(""))
-  var input = el('div',['class="ui left corner labeled right icon fluid large input"'],el('div',['class="ui left corner label"'],el('img',['id="search-fav"','class="left floated avatar ui image"','src="https://www.baidu.com/favicon.ico"'],"")) + el('input',['id="searchinput"','type="search"','placeholder="搜索你想要知道的……"','autocomplete="off"'],"") + el('i',['class="inverted circular search link icon"'],""));
-  return el('header',[],el('div',['id="head"','class="ui inverted vertical masthead center aligned segment"'],(config.hitokoto ? el('div',['id="nav"','class="ui container"'],nav) : "") + el('div',['id="title"','class="ui text container"'],title + (config.search ? input + menu :"") + `${config.selling_ads ? '<div><a id="menubtn" class="red ui icon inverted button"><i class="heart icon"></i> 喜欢此域名 </a></div>' : ''}`)))
-}
+	if (pathname === '/delete-category' && request.method === 'POST') {
+		const requestBody = await request.json();
+		const navigationData = await getNavigationData();
+		const { categoryIndex } = requestBody;
+		navigationData.categories.splice(categoryIndex, 1);
+		await setNavigationData(navigationData);
+		return new Response(JSON.stringify({ message: 'Category deleted successfully' }), {
+			headers: { 'Content-Type': 'application/json; charset=utf-8' },
+		});
+	}
 
-function renderMain() {
-  var main = config.lists.map((item) => {
-    const card = (url,name,desc)=> el('a',['class="card"',`href=${url}`,'target="_blank"'],el('div',['class="content"'],el('img',['class="left floated avatar ui image"',`src=${getFavicon(url)}`],"") + el('div',['class="header"'],name) + el('div',['class="meta"'],desc)));
-    const divider = el('h4',['class="ui horizontal divider header"'],el('i',[`class="${item.icon} icon"`],"")+item.name);
+	if (pathname === '/delete-site' && request.method === 'POST') {
+		const requestBody = await request.json();
+		const navigationData = await getNavigationData();
+		const { categoryIndex, siteIndex } = requestBody;
+		navigationData.categories[categoryIndex].sites.splice(siteIndex, 1);
+		await setNavigationData(navigationData);
+		return new Response(JSON.stringify({ message: 'Site deleted successfully' }), {
+			headers: { 'Content-Type': 'application/json; charset=utf-8' },
+		});
+	}
 
-    var content = el('div',['class="ui four stackable cards"'],item.list.map((link) =>{
-      return card(link.url,link.name,link.desc);
-    }).join(""));
+	if (pathname === '/edit-site' && request.method === 'POST') {
+		const requestBody = await request.json();
+		const navigationData = await getNavigationData();
+		const { categoryIndex, siteIndex, siteName, siteUrl, siteIcon } = requestBody;
+		navigationData.categories[categoryIndex].sites[siteIndex] = { name: siteName, url: siteUrl, icon: siteIcon };
+		await setNavigationData(navigationData);
+		
+		return new Response(JSON.stringify({ message: 'Site updated successfully' }), {
+			headers: { 'Content-Type': 'application/json; charset=utf-8' },
+		});
+	}
 
-    return el('div',['class="ui basic segment"'],divider + content);
-  }).join("");
-  
-  return el('main',[],el('div',['class="ui container"'],main));
-}
-
-function renderSeller() {
-  const item = (type,content) => el('div',['class="item"'],el('i',[`class="${type} icon"`],"") + el('div',['class="content"'],content));
-  var title = el('h1',['class="ui yellow dividing header"'],el('i',['class="gem outline icon"'],"") + el('div',['class="content"'],config.sell_info.domain + ' 正在出售'));
-  var action = el('div',['class="actions"'],el('div',['class="ui basic cancel inverted button"'],el('i',['class="reply icon"'],"") + '返回'));
-
-  var contact = config.sell_info.contact.map((list) => {
-    return item(list.type,list.content);
-  }).join("");
-  var column = el('div',['class="column"'],el('h3',['class="ui center aligned icon inverted header"'],el('i',['class="circular envelope open outline grey inverted icon"'],"") + '联系我') + el('div',['class="ui relaxed celled large list"'],contact));
-  var price = el('div',['class="column"'],el('div',['class="ui large yellow statistic"'],el('div',['class="value"'],el('i',[`class="${config.sell_info.mon_unit} icon"`],"") + config.sell_info.price)));
-  var content = el('div',['class="content"'],el('div',['class="ui basic segment"'],el('div',['class="ui two column stackable center aligned grid"'],el('div',['class="ui inverted vertical divider"'],'感兴趣？') + el('div',['class="middle aligned row"'],price + column))));
-
-  return el('div',['id="seller"','class="ui basic modal"'],title + content + action);
+	return new Response('Not Found', { status: 404 });
 }
 
-function renderHTML(index,seller) {
-  return `<!DOCTYPE html>
-  <html lang="en">
-  <head>
-      <meta charset="UTF-8">
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <meta http-equiv="X-UA-Compatible" content="ie=edge">
-      <title>${config.title} - ${config.subtitle}</title>
-      <link href="https://cdn.jsdelivr.net/npm/semantic-ui-css@2.4.1/semantic.min.css" rel="stylesheet">
-      <link href="https://cdn.jsdelivr.net/gh/sleepwood/cf-worker-dir@0.1.1/style.css" rel="stylesheet">
-      <script src="https://cdn.jsdelivr.net/npm/jquery@3.4.1/dist/jquery.min.js"></script>
-      <script src="https://cdn.jsdelivr.net/npm/semantic-ui-css@2.4.1/semantic.min.js"></script>
-  </head>
-  <body>
-    ${index}
-    ${config.selling_ads ? seller : ''}
-    <script src="https://v1.hitokoto.cn/?encode=js&select=%23hitokoto" defer></script>
-    <script>
-      $('#sengine a').on('click', function (e) {
-        $('#sengine a.active').toggleClass('active');
-        $(e.target).toggleClass('active');
-        $('#search-fav').attr('src',$(e.target).data('url').match(`+/https{0,1}:\/\/\S+\//+`)[0] + '/favicon.ico') ;
-      });
-      $('.search').on('click', function (e) {
-          var url = $('#sengine a.active').data('url');
-          url = url.replace(`+/\$s/+`,$('#searchinput').val());
-          window.open(url);
-      });
-      /* 鼠标聚焦时，回车事件 */
-      $("#searchinput").bind("keypress", function(){
-          if (event.keyCode == 13){
-          // 触发需要调用的方法
-          $(".search").click();
-          }
-      });
-      $('#menubtn').on('click', function (e) {
-          $('#seller').modal('show');
-      });
-    </script>
-  </body>
+async function getNavigationData() {
+	const data = await NAVIGATION_DATA.get('data');
+	return data ? JSON.parse(data) : { categories: [] };
+}
 
-  </html>`
+async function setNavigationData(data) {
+	await NAVIGATION_DATA.put('data', JSON.stringify(data));
+}
+
+async function renderNavigationPage() {
+	const navigationData = await getNavigationData();
+	let html = '<html><head><title>欢迎来到导航页</title>';
+	// 添加的代码
+	html = `
+	<style>
+		body {
+			font-family: 'Arial', sans-serif;
+			padding: 25px;
+			background-color: #e9ecef;
+			color: #212529;
+		}
+		.search-container {
+			text-align: center;
+			margin-bottom: 20px;
+		}
+		h2 {
+			color: #333;
+			font-size: 24px;
+			margin-bottom: 10px;
+		}
+		form {
+			display: inline-block;
+		}
+		select, input, button {
+			padding: 10px;
+			margin: 5px;
+			border: 1px solid #ccc;
+			border-radius: 4px;
+			font-size: 16px;
+		}
+		button {
+			cursor: pointer;
+			background-color: #007bff;
+			color: white;
+			border: none;
+		}
+		button:hover {
+			background-color: #0056b3;
+		}
+	</style>
+	<div class="search-container">
+		<h2>搜索</h2>
+		<form id="searchForm">
+			<select id="searchEngine">
+				${config.searchengine.map(engine => `<option value="${engine.template}">${engine.name}</option>`).join('')}
+			</select>
+			<input type="text" id="searchInput" placeholder="输入搜索内容">
+			<button type="submit">搜索</button>
+		</form>
+	</div>
+	<script>
+		document.getElementById('searchForm').addEventListener('submit', function(event) {
+			event.preventDefault();
+			var searchEngine = document.getElementById('searchEngine').value;
+			var searchInput = document.getElementById('searchInput').value;
+			var searchUrl = searchEngine.replace('$s', encodeURIComponent(searchInput));
+			window.open(searchUrl, '_blank');
+	});
+	
+	</script>
+`;
+
+
+
+
+
+
+	// 添加的代码
+	html += `
+        <style>
+            body {
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                padding: 20px;
+                background-color: #f4f4f9;
+                color: #333;
+            }
+			a {
+				text-decoration: none;
+				outline: none;
+				font-size: 25px;
+				margin-top: 10px;
+			}
+	
+            h2 {
+                color: #4A90E2;
+                font-size: 24px;
+                margin-bottom: 15px;
+                border-bottom: 2px solid #4A90E2;
+                padding-bottom: 5px;
+            }
+			.ca-title {
+				padding: 0;
+			
+			}
+            ul {
+                list-style-type: none;
+                padding-left: 0;
+                display: flex;
+                flex-wrap: wrap;
+
+            }
+
+            li {
+				margin: 10px;
+				 padding: 10px;
+				background-color: #ffffff;
+				border-radius: 5px;
+				box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+				display: flex;
+				flex-direction: column;
+				justify-content: space-between;
+				align-items: center;
+				width: calc(10% - 20px);
+				box-sizing: border-box;
+				vertical-align: middle;
+            }
+
+            form {
+				margin: 0;
+                padding: 20px;
+                background-color: #ffffff;
+                border-radius: 5px;
+                box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+            }
+
+            input,select, button {
+                padding: 10px;
+                margin-right: 10px;
+                border: 1px solid #ddd;
+                border-radius: 5px;
+                font-size: 16px;
+            }
+			
+			.delete-ca-btn {
+				margin: 0 0 3px 10px;
+				padding: 0;
+				background-color: #f4f4f9;
+				border: none;
+				vertical-align: middle;
+				color: #000000;
+			}
+			.delete-ca-btn:hover {
+				color: #ee4b45;
+			}
+			
+			.add-site-btn {
+				margin: 0 0 3px 10px;
+				background-color: #f4f4f9;
+				color: black;
+				border: none;
+				vertical-align: middle;
+				padding: 0;
+			}
+			.add-site-btn:hover {
+				color: orange;
+			}
+			input:focus,
+			select:focus,
+			button:focus {
+				border-color: #4A90E2;
+				outline: none;
+			}
+	
+
+            /* 模态框样式 */
+            .modal {
+                display: none;
+                position: fixed;
+                z-index: 1;
+                left: 0;
+                top: 0;
+                width: 100%;
+                height: 100%;
+                overflow: auto;
+                background-color: rgb(0,0,0);
+                background-color: rgba(0,0,0,0.4);
+                padding-top: 60px;
+            }
+
+            .modal-content {
+				position: absolute; /* 相对于包含它的相对定位元素进行定位 */
+				left: 50%; /* 左边距离父元素左边界的距离为父元素宽度的一半 */
+				top: 50%; /* 上边距离父元素上边界的距离为父元素高度的一半 */
+				transform: translate(-50%, -50%); /* 使用 transform 属性进行微调，使其完全居中 */
+                background-color: #fefefe;
+                margin: 5% auto;
+                padding: 20px;
+                border: 1px solid #888;
+                width: 80%;
+            }
+
+            .close {
+                color: #aaa;
+                float: right;
+                font-size: 28px;
+                font-weight: bold;
+            }
+
+            .close:hover,
+            .close:focus {
+                color: black;
+                text-decoration: none;
+                cursor: pointer;
+            }
+			.item:hover {
+				transform: translateY(-8px);
+				box-shadow: 0 16px 32px rgba(10, 22, 41, .12);
+				transition: all .3s ease;
+				cursor: pointer;
+			}
+			//item-icon
+			.item-icon {
+				width: 70px; height: 70px;
+			}
+			//right click
+			.item {
+				position: relative;
+			}
+			.context-menu {
+				display: none;
+				position: absolute;
+				background: #fff;
+				border: 1px solid #ccc;
+				padding: 5px 0;
+				z-index: 1000;
+			}
+			
+			.context-menu-item {
+				padding: 5px 20px;
+				cursor: pointer;
+			}
+			
+			.context-menu-item:hover {
+				background: #f0f0f0;
+			}
+			.opts {
+				margin-top: 10px;
+			}
+			.opts-item {
+				margin: 0 5px;
+				
+				background-color: #fff;
+				border: none;
+			}
+			.opts-delete:hover {
+				color: red;
+			}
+			.opts-edit:hover {
+				color: #4A90E2;
+			}
+			.
+			.opts-add {
+				color: #f4f4f9;
+			}
+			.site-style {
+				color: #333;
+			}
+			.site-style:hover {
+				color: #ff6700;
+			}
+
+        </style>
+        <script src="https://code.iconify.design/2/2.0.3/iconify.min.js"></script>
+    `;
+	html += '</head><body>';
+
+	// 渲染添加分类表单
+	html += `
+        <h2>添加分类</h2>
+        <form id="addCategoryForm">
+            <input type="text" name="categoryName" placeholder="分类名称" required />
+            <button type="submit">添加</button>
+        </form>
+    `;
+
+	// 渲染添加站点按钮和模态框
+	html += `
+        <div id="myModal" class="modal">
+            <div class="modal-content">
+                <span class="close">&times;</span>
+                <form id="addSiteForm">
+                    <select class="addSelect" name="categoryIndex" required>
+                        ${navigationData.categories.map((category, index) => `<option value="${index}">${category.name}</option>`).join('')}
+                    </select>
+                    <input type="text" name="siteName" placeholder="站点名称" required />
+                    <input type="url" name="siteUrl" placeholder="站点链接" required />
+                    <input type="text" name="siteIcon" placeholder="图标（Iconify 图标名称）" required />
+                    <button type="submit">添加</button>
+                </form>
+            </div>
+        </div>
+    `;
+
+	html += `
+        <div id="editSiteModal" class="modal">
+            <div class="modal-content">
+                <span class="close" onclick="closeEditModal()">&times;</span>
+                <h2>修改站点</h2>
+                <form id="editSiteForm">
+                    <input type="hidden" name="currentCategoryIndex" />
+                    <input type="hidden" name="siteIndex" />
+					<select name="categoryIndex" required>
+						${navigationData.categories.map((category, index) => `<option value="${index}">${category.name}</option>`).join('')}
+					</select>
+                    <input type="text" name="siteName" placeholder="站点名称" required />
+                    <input type="url" name="siteUrl" placeholder="站点链接" required />
+                    <input type="text" name="siteIcon" placeholder="图标（Iconify 图标名称）" required />
+                    <button type="submit">保存修改</button>
+                </form>
+            </div>
+        </div>
+    `;
+
+	// 渲染分类和网站链接
+	navigationData.categories.forEach((category, categoryIndex) => {
+		html += `<h2 class="ca-title">${category.name}`;
+		// 添加删除分类按钮，放在分类名称右侧
+		html += `<button class = "delete-ca-btn"  onclick="deleteCategory(${categoryIndex})"><span class="iconify del-ca-iconify" data-icon = "material-symbols:delete-outline" data-inline="false" data-width="32px" data-height="32px"></span></button>
+        <button class="add-site-btn" onclick = "openAddModal(${categoryIndex})"><span class="iconify" data-icon="carbon:add-filled" data-inline="false" data-width="32px" data-height="32px" ></span></button>
+		</h2><ul>`;
+		category.sites.forEach((site, siteIndex) => {
+			html += `<li class="item">
+			<div class="item-icon" onclick= "openLink(event)" >
+				<span class="iconify" data-icon="${site.icon}" data-inline="false" data-width="80px" data-height="80px" ></span> 
+			</div>
+			<a id="link" class = "site-style" href="${site.url}" target="_blank">${site.name}</a>
+			<div class = "opts">
+				<button class="opts-item opts-delete" onclick="deleteSite(${categoryIndex}, ${siteIndex})"><span class="iconify" data-icon="material-symbols:delete-outline" data-inline="false" data-width="32px" data-height="32px" ></span></button>
+				<button class="opts-item opts-edit" onclick="openEditModal(${categoryIndex}, ${siteIndex}, '${site.name}', '${site.url}', '${site.icon}')"><span class="iconify" data-icon="raphael:edit" data-inline="false" data-width="32px" data-height="32px" ></span></button>
+			</div>
+          </li>`;
+		});
+		html += `</ul>`;
+	});
+
+	// 添加脚本
+	html += `
+        <script>
+		document.getElementById('addCategoryForm').addEventListener('submit', async function(event) {
+			event.preventDefault();
+			const categoryName = event.target.categoryName.value;
+			// 检查 categoryName 是否已存在于 navigationData 的 categories 中
+			let navigationData
+			try {
+				const response = await fetch('/data'); // 发送请求到服务器端的 '/data' 路径
+				if (response.ok) {
+					navigationData = await response.json(); // 解析响应的 JSON 数据
+					
+				} else {
+					console.error('Failed to fetch navigation data:', response.statusText);
+				}
+			} catch (error) {
+				console.error('Error fetching navigation data:', error);
+			}
+			const categoryExists = navigationData.categories.some(category => category.name === categoryName);
+			if (!categoryExists) {
+				// 发送 fetch 请求添加新分类
+				const response = await fetch('/add-category', {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ name: categoryName })
+				});
+		
+				if (response.ok) {
+					// 如果请求成功，重新加载页面
+					location.reload();
+				} else {
+					// 处理请求失败的情况
+					console.error('Failed to add category:', response.statusText);
+				}
+			} else {
+				// 如果分类已存在，则显示提示信息
+				alert('该分类已经存在，请输入不同的分类名称。');
+			}
+		});
+		
+            document.getElementById('addSiteForm').addEventListener('submit', async function(event) {
+                event.preventDefault();
+                const formData = new FormData(event.target);
+                const data = {
+                    categoryIndex: formData.get('categoryIndex'),
+                    siteName: formData.get('siteName'),
+                    siteUrl: formData.get('siteUrl'),
+                    siteIcon: formData.get('siteIcon')
+                };
+                const response = await fetch('/add-site', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                if (response.ok) location.reload();
+            });
+
+            function deleteCategory(categoryIndex) {
+                if (confirm('确定要删除该分类吗？')) {
+                    fetch('/delete-category', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ categoryIndex })
+                    }).then(response => {
+                        if (response.ok) location.reload();
+                    });
+                }
+            }
+
+            function deleteSite(categoryIndex, siteIndex) {
+                if (confirm('确定要删除该站点吗？')) {
+                    fetch('/delete-site', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ categoryIndex, siteIndex })
+                    }).then(response => {
+                        if (response.ok) location.reload();
+                    });
+                }
+            }
+			async function deleteSiteEasy(categoryIndex, siteIndex) {
+                   await fetch('/delete-site', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ categoryIndex, siteIndex })
+                    }).then(response => {
+                        if (response.ok) location.reload();
+                    });
+            }
+            async function addSiteAsync(data) {
+                await fetch('/add-site', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                }).then(response => {
+                    if (response.ok) location.reload();
+                });
+            }
+
+            // 打开模态框
+            const modal = document.getElementById("myModal");
+            const span = document.getElementsByClassName("close")[0];
+
+             function openAddModal(categoryIndex) {
+                modal.style.display = "block";
+				document.querySelector(".addSelect").selectedIndex = categoryIndex;
+				
+            }
+
+            span.onclick = function() {
+                modal.style.display = "none";
+            }
+
+            window.onclick = function(event) {
+                if (event.target == modal) {
+                    modal.style.display = "none";
+                }
+            }
+
+            // 修改站点模态框
+            const editModal = document.getElementById("editSiteModal");
+
+            function openEditModal(categoryIndex, siteIndex, siteName, siteUrl, siteIcon) {
+                editModal.style.display = "block";
+                const form = document.getElementById('editSiteForm');
+				form.currentCategoryIndex.value = categoryIndex;
+                form.categoryIndex.value = categoryIndex;
+                form.siteIndex.value = siteIndex;
+                form.siteName.value = siteName;
+                form.siteUrl.value = siteUrl;
+                form.siteIcon.value = siteIcon;
+            }
+
+            function closeEditModal() {
+                editModal.style.display = "none";
+            }
+			function getAllData() {
+				// 发送 GET 请求
+				fetch('/data')
+  				.then(response => {
+    				// 将响应解析为 JSON 格式
+    				return response.json();
+  				})
+  				.then(data => {
+    				// 打印响应数据到控制台
+					// console.log("获取本地kv")
+    				console.log(data);
+  				})
+  				.catch(error => {
+   			 		// 处理错误
+   			 		console.error('Fetch 请求出错:', error);
+  				});
+
+			}
+            document.getElementById('editSiteForm').addEventListener('submit', async function(event) {
+                event.preventDefault();
+                const formData = new FormData(event.target);
+				const curCaIndex = formData.get('currentCategoryIndex');
+				const selectedIndex = formData.get('categoryIndex');
+				const siteIndex = formData.get('siteIndex');
+                const data = {
+                    categoryIndex: formData.get('categoryIndex'),
+                    siteName: formData.get('siteName'),
+                    siteUrl: formData.get('siteUrl'),
+                    siteIcon: formData.get('siteIcon')
+                };
+
+				let response;
+				if(curCaIndex ===  selectedIndex ) {
+					data.siteIndex = siteIndex;
+					response = await fetch('/edit-site', {
+						method: 'POST',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify(data)
+					});
+				}else {
+                    
+					await deleteSiteEasy(curCaIndex, siteIndex)
+                    const resp = await fetch('/add-site', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(data)
+                    });
+                    if (resp.ok) location.reload();               
+				}
+             
+                if (response.ok) location.reload();
+            });
+			function openLink(event) {
+				// 阻止默认事件，以防止 <a> 标签的默认行为
+				event.preventDefault();
+				// 获取当前点击的元素
+				var clickedElement = event.target;
+				// 如果点击的是 span 元素，将点击元素改为其父元素 div
+				if (clickedElement.tagName.toLowerCase() === 'span') {
+					clickedElement = clickedElement.parentElement;
+				}
+				// 获取 <a> 标签的链接
+				var link = clickedElement.closest('.item').querySelector('a').getAttribute('href');
+				// 在新标签页中打开链接
+				window.open(link, '_blank');
+			}
+			
+        </script>
+    `;
+    
+    
+    
+
+	html += '</body></html>';
+	return html;
 }
